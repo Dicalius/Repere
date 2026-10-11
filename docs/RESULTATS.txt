@@ -1,0 +1,25 @@
+REPERE 1.0.0 — RESULTATS DE VERIFICATION
+Date : 27 septembre 2026
+
+Python 3.12.14 : pytest tests -q
+44 passed, 1 warning in 1.38s
+Le warning provient du client de test Starlette : adaptation future httpx/httpx2.
+Il ne concerne pas le serveur de production.
+
+Node.js / jsdom : node --test tests/test_extension.cjs
+6 tests, 6 pass, 0 fail
+
+Chromium 153.0.8010.0 / Playwright 1.63.0
+Parcours navigateur réussi : connexion, budget, import HTML, correction,
+comparaison, simulation inverse, scénario, sauvegarde, affichage mobile,
+capture DOM. Aucune erreur JavaScript de page relevée.
+
+Compose : configuration YAML analysée ; deux services, volumes, port local,
+contrôles de santé et dépendance au service PostgreSQL vérifiés statiquement.
+
+NON EXECUTE : docker build / docker compose up, intégration PostgreSQL,
+scripts Windows sur Windows, installation Chrome/Edge dans votre profil,
+appel Gemini réel et capture réelle de votre annonce Jinka.
+
+Les données des captures d'écran sont des exemples de test, pas un import de
+vos annonces. La base de l'application démarre vide.
