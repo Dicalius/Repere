@@ -1,0 +1,14 @@
+{
+ "url": "https://site.example/ad/a0",
+ "title": "Annonce | Site",
+ "text": "Appartement 2 pièces 43 m²\nSartrouville · 78500 La Vaudoire Centre-ville\n209 000 €\nPrix net vendeur\n196 000 €\nHonoraires\n13 000 €\nFrais de notaire\n15 680 €\nCoût total\n224 680 €\nCaractéristiques\nSurface habitable\n43 m²\nNombre de pièces\n2\nDPE\nA\nConsommation énergétique\n68 kWh/m²/an\nDescription\nAu calme, bel appartement de 2 pièces avec balcon, séjour lumineux, cuisine équipée. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces.\nVoir l'annonce chez l'agence\nExplorer\nAcheter à Bordeaux\nAcheter à Brest\nAcheter à Sartrouville\nAcheter à Houilles",
+ "html": "<main>\n<article>\n  <h1>Appartement 2 pièces 43 m²</h1>\n  <p>Sartrouville · 78500 La Vaudoire Centre-ville</p>\n  <div class=\"price\"><p>209 000 €</p><p>Prix net vendeur</p><p>196 000 €</p><p>Honoraires</p><p>13 000 €</p><p>Frais de notaire</p><p>15 680 €</p><p>Coût total</p><p>224 680 €</p></div>\n  <section><h2>Caractéristiques</h2><ul><li>Surface habitable</li><li>43 m²</li><li>Nombre de pièces</li><li>2</li><li>DPE</li><li>A</li><li>Consommation énergétique</li><li>68 kWh/m²/an</li></ul></section>\n  <section><h2>Description</h2><p>Au calme, bel appartement de 2 pièces avec balcon, séjour lumineux, cuisine équipée. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces. Proche gare RER A et commerces. </p>\n  <p><a>Voir l'annonce chez l'agence</a></p></section>\n</article>\n\n<section><h2>Explorer</h2><ul><li><a>Acheter à Bordeaux</a></li><li><a>Acheter à Brest</a></li><li><a>Acheter à Sartrouville</a></li><li><a>Acheter à Houilles</a></li></ul></section>\n</main>",
+ "metadata": {},
+ "json_ld": [],
+ "selection_only": false,
+ "use_gemini": false,
+ "capture_warnings": [
+  "Annonces voisines (similaires, à proximité…) écartées de la capture."
+ ],
+ "images": []
+}
