@@ -4,19 +4,19 @@ const dir=path.join(__dirname,'..','extension');
 const code=fs.readFileSync(path.join(dir,'capture.js'),'utf8');
 const html=`<html><head><title>Appartement 43 m²</title><meta property="og:description" content="Appartement 234000 euros"><script type="application/ld+json">{"@type":"Apartment","offers":{"price":234000,"priceCurrency":"EUR"}}</script></head><body><header>Mon compte personnel</header><main><p id="select">Prix : 234 000 €. Surface habitable : 43 m². Appartement ancien à vendre.</p><div class="price" onclick="bad()">234 000 €</div><div hidden>Texte privé</div><div style="display:none">Secret CSS</div><form><input value="mot-de-passe"></form><script>bad()</script></main></body></html>`;
 
-test('collecte HTML nettoyé, texte visible et JSON-LD',()=>{
+test('collecte HTML nettoyé, texte visible et JSON-LD',async()=>{
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'https://example.com/annonce'});
- const r=dom.window.eval(code);
+ const r=await dom.window.eval(code); // capture.js est asynchrone (relecture Leboncoin)
  assert.match(r.text,/234 000/);assert.match(r.html,/class="price"/);assert.equal(r.json_ld.length,1);
  assert.doesNotMatch(r.html,/onclick|mot-de-passe|bad\(|Texte privé|Secret CSS/);
  assert.doesNotMatch(r.text,/Mon compte|Texte privé|Secret CSS/);
  dom.window.close();
 });
 
-test('sélection manuelle exclut HTML et métadonnées',()=>{
+test('sélection manuelle exclut HTML et métadonnées',async()=>{
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'https://example.com/annonce'});
  const range=dom.window.document.createRange();range.selectNodeContents(dom.window.document.getElementById('select'));dom.window.getSelection().addRange(range);
- const r=dom.window.eval(code);assert.equal(r.selection_only,true);assert.equal(r.html,'');assert.equal(r.json_ld.length,0);assert.equal(Object.keys(r.metadata).length,0);dom.window.close();
+ const r=await dom.window.eval(code);assert.equal(r.selection_only,true);assert.equal(r.html,'');assert.equal(r.json_ld.length,0);assert.equal(Object.keys(r.metadata).length,0);dom.window.close();
 });
 
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -48,4 +48,15 @@ test('échec serveur affiché sans fausse confirmation',async()=>{
 test('permissions limitées au clic et au service local',()=>{
  const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json')));
  assert.deepEqual(manifest.permissions,['activeTab','scripting','storage']);assert.deepEqual(manifest.host_permissions,['http://127.0.0.1/*']);
+});
+
+test('Leboncoin : annonce lue dans __NEXT_DATA__, sans données du vendeur',async()=>{
+ const sale=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures','leboncoin_vente.json'),'utf8')).ad;
+ const ad={...sale,images:{urls:sale.images},owner:{type:'private',name:'Nom du vendeur',user_id:'compte-123'}};
+ const page=`<html><head><title>Annonce | leboncoin</title></head><body><main><h1>${ad.subject}</h1><p>379 000 €</p></main><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({props:{pageProps:{ad}}})}</script></body></html>`;
+ const dom=new JSDOM(page,{runScripts:'outside-only',url:'https://www.leboncoin.fr/ad/ventes_immobilieres/'+ad.list_id});
+ const r=await dom.window.eval(code);
+ assert.equal(r.site_data.source,'leboncoin');assert.equal(r.site_data.ad.list_id,ad.list_id);assert.deepEqual(r.site_data.ad.price,[379000]);
+ assert.doesNotMatch(JSON.stringify(r.site_data),/Nom du vendeur|compte-123/);assert.ok(r.images[0].startsWith('https://img.leboncoin.fr/'));
+ dom.window.close();
 });

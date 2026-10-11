@@ -1,0 +1,13 @@
+# Configuration locale et secrets : jamais dans le dépôt
+.env
+*.dump
+data/
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+# Tests de l'extension
+tests/node_modules/
+tests/package-lock.json

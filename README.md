@@ -22,6 +22,25 @@ docker compose exec -T app python -m app.manage token
 
 **`ARRETER.bat`** arrête les deux services sans supprimer les données. Relancez `DEMARRER.bat` pour reprendre.
 
+## Mettre à jour
+
+Le code est sur GitHub (`Dicalius/Repere`). À chaque modification fusionnée dans `main`, GitHub Actions lance les tests puis publie l'image de l'application sur `ghcr.io/dicalius/repere` (étiquettes `latest`, numéro de version et commit).
+
+Double-cliquez sur **`METTRE_A_JOUR.bat`**. Il récupère le code, les scripts et l'extension (`git pull`), télécharge la nouvelle image et redémarre uniquement l'application : PostgreSQL, ses volumes et `.env` ne sont pas touchés. Si l'extension a changé, le script le signale : cliquez alors sur **Recharger** dans `chrome://extensions`.
+
+**Une seule fois**, pour relier un dossier existant au dépôt (le fichier `.env` et les données sont conservés) :
+
+```powershell
+git init -b main
+git remote add origin https://github.com/Dicalius/Repere.git
+git fetch origin main
+git reset --hard origin/main
+```
+
+L'image est privée si le dépôt l'est : `docker login ghcr.io` (identifiant GitHub et jeton *classic* avec la seule permission `read:packages`) permet de la télécharger. Sans connexion, les scripts construisent l'image sur le PC à partir du code récupéré ; c'est seulement plus long.
+
+Pour revenir à une version précédente, ajoutez par exemple `REPERE_VERSION=1.3.0` dans `.env`, puis relancez `METTRE_A_JOUR.bat`. Supprimez la ligne pour revenir à la dernière version.
+
 ### Linux ou macOS
 
 Avec Docker et Docker Compose disponibles, ouvrez un terminal dans `repere` :

@@ -26,6 +26,8 @@ Renseignez ensuite Mon budget, sélectionnez vos annonces dans Comparer, puis
 utilisez Simuler : apport vers mensualité ou mensualité cible vers apport.
 
 ARRETER.bat arrête les services et conserve vos données.
+METTRE_A_JOUR.bat installe la dernière version publiée sur GitHub, sans toucher
+aux données (voir README.md, section Mettre à jour).
 Paramètres > Télécharger une sauvegarde conserve aussi vos captures et scénarios.
 
 Le guide détaillé est README.md. Les adaptations HTML sont expliquées dans

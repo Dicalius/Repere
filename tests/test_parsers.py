@@ -55,16 +55,24 @@ def test_metadata_price_without_label_and_no_rental_or_price_per_area():
         assert pipeline(Capture(title=title))['facts']['price_eur'] is None
 
 
-def test_conflict_keeps_candidates_without_arbitrary_winner():
+def test_conflict_resolved_by_most_reliable_source_keeps_candidates():
+    # Depuis la 1.1 : la source la plus fiable (JSON-LD) l'emporte sur un libellé du texte ; l'autre valeur reste
+    # visible dans les diagnostics, avec un avertissement. Un vrai conflit (même niveau de fiabilité) reste vide.
     r=pipeline(Capture(url=URL,json_ld=[json.dumps(NODE)],text='Prix : 250 000 €'))
-    assert r['facts']['price_eur'] is None
-    assert {x['value'] for x in r['conflicts']['price_eur']}=={234000,250000}
+    assert r['facts']['price_eur']==234000
+    assert {x['value'] for x in r['candidates']['price_eur']}=={234000,250000}
+    assert [x['value'] for x in r['candidates']['price_eur'] if x.get('retained')]==[234000]
+    assert any('source la plus fiable' in w for w in r['warnings'])
+    same_level=pipeline(Capture(url=URL,text='Prix : 234 000 €\nautre bloc\nPrix : 250 000 €'))
+    assert same_level['facts']['price_eur'] is None and 'price_eur' in same_level['conflicts']
 
 
 def test_selection_drops_html_and_metadata():
     r=pipeline(Capture(selection_only=True,text='Prix : 210 000 €',metadata={'og:title':'Appartement 250 000 €'},json_ld=[json.dumps(NODE)],html='<div class="price">260 000 €</div>'))
     assert r['facts']['price_eur']==210000
-    assert len(r['candidates']['price_eur'])==1
+    # Seul le texte sélectionné est lu (comme résumé et comme libellé) : ni JSON-LD, ni métadonnées, ni HTML.
+    assert {x['value'] for x in r['candidates']['price_eur']}=={210000}
+    assert all(x['parser'].startswith('Texte visible') for x in r['candidates']['price_eur'])
 
 
 def test_trafilatura_is_callable_and_identified():
