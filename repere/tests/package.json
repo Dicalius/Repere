@@ -1,6 +1,0 @@
-{
-  "name": "repere-extension-tests",
-  "private": true,
-  "scripts": {"test": "node --test test_extension.cjs"},
-  "devDependencies": {"jsdom": "30.1.0"}
-}
