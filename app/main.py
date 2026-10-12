@@ -14,7 +14,7 @@ from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
 from pydantic import ValidationError
 from . import VERSION
-from .db import Session, Listing, CaptureRecord, Photo, Setting, Scenario, initialize, now
+from .db import DATA_DIR, Session, Listing, CaptureRecord, Photo, Setting, Scenario, initialize, now
 from .schemas import AddressSearch, Capture, Facts, ImportRequest, ListingEdit, PhotoRequest, Profile, ScenarioSave, Simulation
 from . import photos
 from .dpe_lookup import search_addresses
@@ -171,7 +171,17 @@ def status():
         return {"version": VERSION, "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
                 "model": os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
                 "listings": db.scalar(select(func.count()).select_from(Listing)),
-                "database": "PostgreSQL" if db.bind.dialect.name == "postgresql" else "SQLite (développement)"}
+                "database": "PostgreSQL" if db.bind.dialect.name == "postgresql" else "SQLite (développement)",
+                "release": release_info()}
+
+
+def release_info():
+    """Origine du code lancé, écrite par le démarrage du conteneur (docker/entrypoint.py)."""
+    try:
+        state = json.loads((DATA_DIR / "release.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return {k: state.get(k) for k in ("source", "commit", "ref", "started_at")} if isinstance(state, dict) else None
 
 
 @app.get("/api/listings", dependencies=[Depends(authenticate)])

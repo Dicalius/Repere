@@ -4,52 +4,49 @@ Une application locale pour importer des annonces immobilières, comparer les bi
 
 Le paquet contient l'application, PostgreSQL via Docker Compose, une extension Chrome/Edge et le code source. La base est vide au premier démarrage. Les captures d'écran de `tests/screenshots` utilisent uniquement des annonces fictives.
 
-## Démarrer sous Windows
+## Démarrer
 
-1. Installez et ouvrez [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) avec les conteneurs Linux.
-2. Arrêtez l'ancien serveur Excel avec `Ctrl+C` dans sa fenêtre : il utilisait lui aussi le port **8765**.
-3. Extrayez **tout le dossier `repere`** dans un emplacement permanent, par exemple `Documents\Repere`. Ne lancez pas les fichiers depuis l'archive ZIP.
-4. Double-cliquez sur **`DEMARRER.bat`**. Le premier lancement télécharge les images et installe les dépendances ; une connexion Internet est nécessaire pour cette préparation.
-5. Copiez le **code de connexion** affiché dans la fenêtre. Le navigateur ouvre [http://127.0.0.1:8765](http://127.0.0.1:8765). Collez le code pour entrer.
+1. Installez et ouvrez [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) (conteneurs Linux), ou Docker et Docker Compose sous Linux/macOS.
+2. Récupérez le dossier depuis GitHub (`git clone https://github.com/Dicalius/Repere.git`) dans un emplacement permanent.
+3. Dans ce dossier, la première fois :
 
-Le lanceur crée automatiquement `.env` et un mot de passe de base de données aléatoire. Il conserve une configuration existante. Le code de connexion est généré séparément et conservé dans un volume Docker. Python et Node.js ne sont pas nécessaires sur le PC pour utiliser l'application.
-
-Pour retrouver le code, ouvrez un terminal dans le dossier `repere` :
-
-```powershell
-docker compose exec -T app python -m app.manage token
+```sh
+docker compose up -d --build
 ```
 
-**`ARRETER.bat`** arrête les deux services sans supprimer les données. Relancez `DEMARRER.bat` pour reprendre.
+4. Le **code de connexion** s'affiche une fois dans les journaux du conteneur `app` (Docker Desktop → conteneur `repere-app-1` → *Logs*). Ouvrez [http://127.0.0.1:8765](http://127.0.0.1:8765) et collez-le.
+
+Aucun script ni fichier `.env` n'est nécessaire. `.env` reste facultatif pour la clé Gemini et quelques réglages (voir `.env.example`). Pour retrouver le code :
+
+```sh
+docker compose exec app repere token
+```
+
+Pour arrêter : `docker compose stop` (les données sont conservées). Pour relancer : `docker compose up -d`.
+
+### Base de données sans mot de passe à gérer
+
+L'application se connecte à PostgreSQL par un socket Unix partagé entre les deux conteneurs (volume `repere_pg_socket`), avec l'authentification locale de l'image officielle. Il n'y a donc aucun mot de passe à conserver dans `.env` ni à resynchroniser. Les connexions réseau à PostgreSQL restent protégées par mot de passe ; le port n'est pas publié sur le PC. Seul le conteneur `app` monte ce socket.
 
 ## Mettre à jour
 
-Le code est sur GitHub (`Dicalius/Repere`). À chaque modification fusionnée dans `main`, GitHub Actions lance les tests puis publie l'image de l'application sur `ghcr.io/dicalius/repere` (étiquettes `latest`, numéro de version et commit).
+À chaque push sur `main`, GitHub Actions lance les tests. S'ils réussissent, la branche **`valide`** est avancée sur ce commit.
 
-Double-cliquez sur **`METTRE_A_JOUR.bat`**. Il récupère le code, les scripts et l'extension (`git pull`), télécharge la nouvelle image et redémarre uniquement l'application : PostgreSQL, ses volumes et `.env` ne sont pas touchés. Si l'extension a changé, le script le signale : cliquez alors sur **Recharger** dans `chrome://extensions`.
+**Pour installer la dernière version validée, redémarrez le conteneur `app`** (bouton *Restart* de Docker Desktop, ou `docker compose restart app`). À chaque démarrage, il :
 
-**Une seule fois**, pour relier un dossier existant au dépôt (le fichier `.env` et les données sont conservés) :
+1. demande à GitHub le commit de `valide` et le télécharge s'il a changé (`app/`, `config/`, `requirements.txt`) ;
+2. installe une seule fois les dépendances Python si `requirements.txt` a changé ;
+3. vérifie que le nouveau code se charge, sinon garde la version précédente ;
+4. lance l'application.
 
-```powershell
-git init -b main
-git remote add origin https://github.com/Dicalius/Repere.git
-git fetch origin main
-git reset --hard origin/main
-```
+Sans accès à GitHub, la dernière version téléchargée est relancée. La base de données n'est jamais touchée. Le journal du conteneur indique la version lancée ; `docker compose exec app repere version` et **Paramètres** affichent le commit.
 
-L'image est privée si le dépôt l'est : `docker login ghcr.io` (identifiant GitHub et jeton *classic* avec la seule permission `read:packages`) permet de la télécharger. Sans connexion, les scripts construisent l'image sur le PC à partir du code récupéré ; c'est seulement plus long.
+Deux cas demandent une action :
 
-Pour revenir à une version précédente, ajoutez par exemple `REPERE_VERSION=1.3.0` dans `.env`, puis relancez `METTRE_A_JOUR.bat`. Supprimez la ligne pour revenir à la dernière version.
+- **Extension modifiée** : après avoir récupéré le code dans votre dossier (`git pull`, ou bundle appliqué), cliquez sur **Recharger** dans `chrome://extensions`.
+- **Démarrage du conteneur modifié** : le journal affiche « reconstruis l'image une fois ». Lancez alors `docker compose up -d --build` depuis le dossier à jour.
 
-### Linux ou macOS
-
-Avec Docker et Docker Compose disponibles, ouvrez un terminal dans `repere` :
-
-```sh
-sh demarrer.sh
-```
-
-Le script crée `.env` si nécessaire, démarre les services puis affiche le code et l'adresse. Pour arrêter : `docker compose stop`.
+Pour figer une version, indiquez un commit dans `.env` (`REPERE_GITHUB_REF=<commit>`), puis redémarrez `app`. Videz la ligne pour revenir à la dernière version validée. Si le dépôt devient privé, ajoutez `REPERE_GITHUB_TOKEN` : un jeton *fine-grained* limité à ce dépôt, *Contents* en lecture seule.
 
 ## Importer une annonce facilement
 
@@ -158,16 +155,16 @@ docker compose exec -T db pg_dump -U repere -d repere -Fc -f /tmp/repere.dump
 docker compose cp db:/tmp/repere.dump ./repere.dump
 ```
 
-Conservez également `.env` et `config/parsers.json` pour retrouver votre configuration. Le code de connexion peut être récupéré séparément avec la commande de démarrage. Aucune migration automatique d'une future version de schéma n'est fournie dans cette première version.
+Conservez également `config/parsers.json` (et `.env` si vous y avez mis une clé Gemini). Le code de connexion peut être récupéré séparément avec la commande de démarrage. Aucune migration automatique d'une future version de schéma n'est fournie dans cette première version.
 
 ## En cas de problème
 
 | Symptôme | Action |
 | --- | --- |
 | Port 8765 occupé | Arrêtez l'ancien serveur Excel ou un autre Repère déjà lancé. |
-| Docker indisponible | Ouvrez Docker Desktop, attendez son démarrage, relancez `DEMARRER.bat`. |
-| Base refusant la connexion après une modification de `.env` | Le mot de passe du volume existant ne change pas automatiquement. Rétablissez celui créé au premier lancement. |
-| Code refusé | Récupérez le code avec `python -m app.manage token` dans le conteneur, puis remplacez-le dans l'application et l'extension. |
+| Docker indisponible | Ouvrez Docker Desktop, attendez son démarrage, puis `docker compose up -d`. |
+| Nouvelle version non installée | Vérifiez que le workflow GitHub est vert (branche `valide` avancée), puis redémarrez `app` et lisez son journal. |
+| Code refusé | Récupérez le code avec `docker compose exec app repere token`, puis remplacez-le dans l'application et l'extension. |
 | URL bloquée, page vide ou vérification humaine | Ouvrez l'annonce dans votre navigateur habituel, puis utilisez l'extension. |
 | Prix absent | Vérifiez les conflits dans les diagnostics ; ouvrez la description complète ; essayez HTML, métadonnées ou une règle CSS ciblée. La correction manuelle est conservée. |
 | Complément Gemini indisponible | Consultez l'avertissement de la fiche, contrôlez clé et modèle. Les extractions locales restent utilisables. |

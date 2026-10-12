@@ -1,38 +1,32 @@
 REPÈRE — Votre recherche immobilière, sans Excel
-Version 1.0.0
+Version 1.4.0
 
-DÉMARRAGE WINDOWS
+DÉMARRER
 
 1. Installez et ouvrez Docker Desktop avec les conteneurs Linux.
-2. Arrêtez l'ancien serveur d'import Excel : il utilisait aussi le port 8765.
-3. Extrayez tout le dossier repere de l'archive dans un dossier permanent.
-4. Double-cliquez sur DEMARRER.bat. Le premier lancement télécharge les images
-   et les dépendances ; laissez la fenêtre ouverte pendant la préparation.
-5. Copiez le code affiché dans la fenêtre puis connectez-vous sur :
-   http://127.0.0.1:8765
+2. Récupérez le dossier depuis GitHub (git clone https://github.com/Dicalius/Repere.git).
+3. Dans ce dossier, la première fois : docker compose up -d --build
+4. Le code de connexion s'affiche une fois dans les journaux du conteneur app
+   (Docker Desktop > repere-app-1 > Logs). Ouvrez http://127.0.0.1:8765 et collez-le.
+   Pour le retrouver : docker compose exec app repere token
+
+Aucun script ni fichier .env n'est nécessaire (.env reste facultatif, voir .env.example).
+
+METTRE À JOUR
+
+Redémarrez le conteneur app (Docker Desktop, ou docker compose restart app). Au démarrage,
+il télécharge la dernière version validée par les tests sur GitHub (branche « valide »),
+installe les nouvelles dépendances si besoin, puis se lance. La base n'est pas touchée.
+Si l'extension a changé : chrome://extensions > Recharger.
 
 AJOUTER UNE ANNONCE DEPUIS CHROME OU EDGE
 
 1. Ouvrez chrome://extensions ou edge://extensions et activez le Mode développeur.
-2. Cliquez sur Charger l'extension non empaquetée ; sélectionnez le dossier
-   extension de CE paquet Repère.
+2. Cliquez sur Charger l'extension non empaquetée ; sélectionnez le dossier extension.
 3. Dans l'extension, enregistrez le même code de connexion que dans l'application.
-4. Ouvrez une annonce, cliquez sur Lire l'annonce ouverte, puis sur
-   Vérifier les champs localement et Ajouter à Repère.
-5. Vérifiez la fiche dans Repère. Gemini est facultatif : aucun abonnement ni
-   aucune clé API n'est nécessaire pour les extractions locales.
+4. Ouvrez une annonce, cliquez sur Lire l'annonce ouverte, puis sur Ajouter à Repère.
+5. Vérifiez la fiche dans Repère. Gemini est facultatif.
 
-Renseignez ensuite Mon budget, sélectionnez vos annonces dans Comparer, puis
-utilisez Simuler : apport vers mensualité ou mensualité cible vers apport.
-
-ARRETER.bat arrête les services et conserve vos données.
-METTRE_A_JOUR.bat installe la dernière version publiée sur GitHub, sans toucher
-aux données (voir README.md, section Mettre à jour).
+Arrêter : docker compose stop (les données sont conservées).
 Paramètres > Télécharger une sauvegarde conserve aussi vos captures et scénarios.
-
-Le guide détaillé est README.md. Les adaptations HTML sont expliquées dans
-docs/PARSEURS.md. Les tests et limites vérifiés figurent dans docs/VALIDATION.md.
-
-L'application a été testée dans Chromium avec une base SQLite temporaire.
-Le démarrage Docker/PostgreSQL et les scripts Windows restent à valider
-sur votre ordinateur : ce contexte ne disposait pas d'un moteur Docker.
+Le guide détaillé est README.md.

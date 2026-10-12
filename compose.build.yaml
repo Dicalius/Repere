@@ -1,6 +1,0 @@
-# Construction locale de l'image, sans passer par ghcr.io :
-#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
-# Les scripts DEMARRER.bat et METTRE_A_JOUR.bat l'utilisent automatiquement si le téléchargement échoue.
-services:
-  app:
-    build: .

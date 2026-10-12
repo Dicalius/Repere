@@ -1,13 +1,23 @@
 name: repere
+# Premier lancement, ou après « Le démarrage du conteneur a changé » dans les journaux :
+#   docker compose up -d --build
+# Ensuite : docker compose up -d. Pour mettre à jour, redémarrer le conteneur « app » (Docker Desktop ou
+# « docker compose restart app ») : au démarrage, il récupère la dernière version validée par les tests sur GitHub.
 services:
   app:
-    # Image publiée par GitHub Actions ; REPERE_VERSION (dans .env) fige une version, ex. 1.3.0.
-    image: ghcr.io/dicalius/repere:${REPERE_VERSION:-latest}
+    build: .
     ports:
       - "127.0.0.1:8765:8765"
     environment:
-      DATABASE_URL: "postgresql+psycopg://repere:${POSTGRES_PASSWORD:?Lance INITIALISER.ps1 ou demarrer.sh pour creer .env}@db:5432/repere"
+      # Connexion par le socket Unix partagé avec « db » (authentification locale de l'image PostgreSQL) :
+      # aucun mot de passe à conserver ni à synchroniser.
+      DATABASE_URL: "postgresql+psycopg://repere@/repere?host=/run/postgresql"
       REPERE_DATA_DIR: /app/data
+      # Source des mises à jour : branche « valide », avancée par GitHub Actions quand les tests réussissent.
+      REPERE_GITHUB_REPO: "${REPERE_GITHUB_REPO:-Dicalius/Repere}"
+      REPERE_GITHUB_REF: "${REPERE_GITHUB_REF:-valide}"
+      # Facultatif : nécessaire seulement si le dépôt devient privé (jeton en lecture seule sur ce dépôt).
+      REPERE_GITHUB_TOKEN: "${REPERE_GITHUB_TOKEN:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
       PARSER_RULES_PATH: /app/config/parsers.json
@@ -17,6 +27,7 @@ services:
       ADEME_AUTO_SEARCH: "${ADEME_AUTO_SEARCH:-1}"
     volumes:
       - app_data:/app/data
+      - pg_socket:/run/postgresql:ro
       - ./config/parsers.json:/app/config/parsers.json:ro
     depends_on:
       db:
@@ -25,17 +36,27 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 20s
+      retries: 6
+      # Marge pour le téléchargement d'une version et, rarement, l'installation de nouvelles dépendances.
+      start_period: 600s
     restart: unless-stopped
   db:
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: repere
       POSTGRES_USER: repere
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Mot de passe manquant}"
+      # Sert uniquement à la création de la base (connexions réseau). Vide : un mot de passe aléatoire est
+      # généré ; l'application, elle, passe par le socket. Une base existante n'est pas modifiée.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        [ -n "$$POSTGRES_PASSWORD" ] || { POSTGRES_PASSWORD="$$(tr -dc a-f0-9 </dev/urandom | head -c 48)"; export POSTGRES_PASSWORD; };
+        exec docker-entrypoint.sh postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - pg_socket:/var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U repere -d repere"]
       interval: 5s
@@ -45,3 +66,4 @@ services:
 volumes:
   postgres_data:
   app_data:
+  pg_socket:

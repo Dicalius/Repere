@@ -4,3 +4,6 @@
 *.sh text eol=lf
 *.png binary
 *.jpg binary
+# Scripts exécutés dans le conteneur Linux : toujours en LF, même sous Windows
+docker/** text eol=lf
+Dockerfile text eol=lf

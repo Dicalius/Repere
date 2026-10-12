@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Commandes Repère dans le conteneur, toujours sur la version en cours d'exécution.
+
+  repere token                       code de connexion de l'application et de l'extension
+  repere version                     version, commit et origine du code lancé
+  repere dpe …, repere dpe-lettres …  vérifications de la recherche d'adresse (voir app/manage.py)
+"""
+import json
+import os
+import sys
+from pathlib import Path
+
+DATA = Path(os.getenv("REPERE_DATA_DIR", "/app/data"))
+try:
+    state = json.loads((DATA / "release.json").read_text(encoding="utf-8"))
+except (OSError, ValueError):
+    state = {"code_dir": os.getenv("REPERE_BAKED_DIR", "/app"), "python": sys.executable, "source": "image"}
+
+if sys.argv[1:2] == ["version"]:
+    commit = state.get("commit") or "—"
+    print(f"Repère {state.get('version', '?')} · commit {commit[:7]} · origine : "
+          f"{'GitHub, branche ' + str(state.get('ref')) if state.get('source') == 'github' else 'image'}"
+          f" · démarré le {state.get('started_at', '?')}")
+    sys.exit(0)
+os.chdir(state["code_dir"])
+os.execv(state["python"], [state["python"], "-m", "app.manage", *sys.argv[1:]])
