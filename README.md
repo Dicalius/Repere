@@ -8,19 +8,16 @@ Le paquet contient l'application, PostgreSQL via Docker Compose, une extension C
 
 1. Installez et ouvrez [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) (conteneurs Linux), ou Docker et Docker Compose sous Linux/macOS.
 2. Récupérez le dossier depuis GitHub (`git clone https://github.com/Dicalius/Repere.git`) dans un emplacement permanent.
-3. Dans ce dossier, la première fois :
+3. Dans ce dossier :
 
 ```sh
-docker compose up -d --build
-```
-
-4. Le **code de connexion** s'affiche une fois dans les journaux du conteneur `app` (Docker Desktop → conteneur `repere-app-1` → *Logs*). Ouvrez [http://127.0.0.1:8765](http://127.0.0.1:8765) et collez-le.
-
-Aucun script ni fichier `.env` n'est nécessaire. `.env` reste facultatif pour la clé Gemini et quelques réglages (voir `.env.example`). Pour retrouver le code :
-
-```sh
+docker compose up -d
 docker compose exec app repere token
 ```
+
+4. Ouvrez [http://127.0.0.1:8765](http://127.0.0.1:8765) et collez le **code de connexion** affiché par la seconde commande.
+
+Aucun script ni fichier `.env` n'est nécessaire. `.env` reste facultatif pour la clé Gemini et quelques réglages (voir `.env.example`).
 
 Pour arrêter : `docker compose stop` (les données sont conservées). Pour relancer : `docker compose up -d`.
 
@@ -30,23 +27,20 @@ L'application se connecte à PostgreSQL par un socket Unix partagé entre les de
 
 ## Mettre à jour
 
-À chaque push sur `main`, GitHub Actions lance les tests. S'ils réussissent, la branche **`valide`** est avancée sur ce commit.
+À chaque push sur `main` qui modifie l'application (`app/`, `config/`, `docker/`, `Dockerfile`, `requirements.txt`), le workflow **Image Repère** construit l'image et la publie sur `ghcr.io/dicalius/repere` (étiquettes `latest` et SHA du commit). Le workflow **Tests Repère** tourne en parallèle, sans bloquer l'image.
 
-**Pour installer la dernière version validée, redémarrez le conteneur `app`** (bouton *Restart* de Docker Desktop, ou `docker compose restart app`). À chaque démarrage, il :
+Quand le workflow est vert, depuis le dossier à jour (`git pull`) :
 
-1. demande à GitHub le commit de `valide` et le télécharge s'il a changé (`app/`, `config/`, `requirements.txt`) ;
-2. installe une seule fois les dépendances Python si `requirements.txt` a changé ;
-3. vérifie que le nouveau code se charge, sinon garde la version précédente ;
-4. lance l'application.
+```sh
+docker compose pull app
+docker compose up -d --no-deps app
+```
 
-Sans accès à GitHub, la dernière version téléchargée est relancée. La base de données n'est jamais touchée. Le journal du conteneur indique la version lancée ; `docker compose exec app repere version` et **Paramètres** affichent le commit.
+Seul le conteneur `app` est remplacé : PostgreSQL, ses volumes et `.env` ne sont pas touchés. `docker compose exec app repere version` et **Paramètres** affichent le commit de l'image lancée.
 
-Deux cas demandent une action :
-
-- **Extension modifiée** : après avoir récupéré le code dans votre dossier (`git pull`, ou bundle appliqué), cliquez sur **Recharger** dans `chrome://extensions`.
-- **Démarrage du conteneur modifié** : le journal affiche « reconstruis l'image une fois ». Lancez alors `docker compose up -d --build` depuis le dossier à jour.
-
-Pour figer une version, indiquez un commit dans `.env` (`REPERE_GITHUB_REF=<commit>`), puis redémarrez `app`. Videz la ligne pour revenir à la dernière version validée. Si le dépôt devient privé, ajoutez `REPERE_GITHUB_TOKEN` : un jeton *fine-grained* limité à ce dépôt, *Contents* en lecture seule.
+- **Extension modifiée** : cliquez sur **Recharger** dans `chrome://extensions` après le `git pull`.
+- **Revenir à une image précédente** : `REPERE_TAG=<SHA complet du commit>` dans `.env`, puis les deux commandes ci-dessus. Videz la ligne pour revenir à `latest`.
+- **Construire l'image sur le PC** (sans GitHub) : `docker build -t ghcr.io/dicalius/repere:latest .`, puis `docker compose up -d --no-deps app`.
 
 ## Importer une annonce facilement
 
@@ -163,7 +157,8 @@ Conservez également `config/parsers.json` (et `.env` si vous y avez mis une cl�
 | --- | --- |
 | Port 8765 occupé | Arrêtez l'ancien serveur Excel ou un autre Repère déjà lancé. |
 | Docker indisponible | Ouvrez Docker Desktop, attendez son démarrage, puis `docker compose up -d`. |
-| Nouvelle version non installée | Vérifiez que le workflow GitHub est vert (branche `valide` avancée), puis redémarrez `app` et lisez son journal. |
+| Nouvelle version non installée | Vérifiez que le workflow **Image Repère** est vert, puis `docker compose pull app` et `docker compose up -d --no-deps app`. `repere version` doit afficher le nouveau commit. |
+| `pull` refusé (`denied`, `unauthorized`) | Le paquet `repere` est privé sur GitHub : passez-le en public (*Packages → repere → Package settings → Change visibility*) ou connectez Docker avec `docker login ghcr.io`. |
 | Code refusé | Récupérez le code avec `docker compose exec app repere token`, puis remplacez-le dans l'application et l'extension. |
 | URL bloquée, page vide ou vérification humaine | Ouvrez l'annonce dans votre navigateur habituel, puis utilisez l'extension. |
 | Prix absent | Vérifiez les conflits dans les diagnostics ; ouvrez la description complète ; essayez HTML, métadonnées ou une règle CSS ciblée. La correction manuelle est conservée. |

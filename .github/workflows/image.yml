@@ -1,0 +1,52 @@
+# Image de l'application, construite et publiée sur ghcr.io à chaque push sur main qui modifie son contenu.
+# Sur le PC : docker compose pull app, puis docker compose up -d --no-deps app (la base n'est pas touchée).
+name: Image Repère
+
+on:
+  push:
+    branches: [main]
+    # Un push qui ne touche que l'extension, la documentation ou les tests ne reconstruit pas l'image.
+    paths:
+      - "app/**"
+      - "config/**"
+      - "docker/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "requirements.txt"
+      - ".github/workflows/image.yml"
+  workflow_dispatch:
+
+# Deux pushes rapprochés : seule la construction du dernier va au bout.
+concurrency:
+  group: image
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Sans « context », l'action lit directement le commit poussé : pas d'étape checkout.
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          platforms: linux/amd64
+          # Noms ghcr.io en minuscules. latest = dernier push ; le SHA complet permet de revenir en arrière.
+          tags: |
+            ghcr.io/dicalius/repere:latest
+            ghcr.io/dicalius/repere:${{ github.sha }}
+          build-args: REPERE_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Couche des dépendances Python réutilisée tant que requirements.txt ne change pas.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

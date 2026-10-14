@@ -1,14 +1,20 @@
 import json
+import os
 import sys
+from . import VERSION
 from .security import token
 
 USAGE = ("Usage : python -m app.manage token\n"
+         "        python -m app.manage version\n"
          "        python -m app.manage dpe <code postal> <kWh/m²/an> [kg CO2/m²/an] [surface m²]\n"
          "        python -m app.manage dpe-lettres <code postal> <surface m²> <lettre DPE> [lettre GES]")
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["token"]:
         print(token())
+    elif sys.argv[1:] == ["version"]:
+        commit = os.getenv("REPERE_COMMIT", "")
+        print(f"Repère {VERSION} · " + (f"commit {commit[:7]}" if commit else "image construite localement"))
     elif sys.argv[1:2] == ["dpe"] and 3 <= len(sys.argv) - 1 <= 5:
         # Vérification en direct de la recherche d'adresse, sans passer par l'interface.
         from .dpe_lookup import search_addresses

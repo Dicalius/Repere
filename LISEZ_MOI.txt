@@ -1,22 +1,23 @@
 REPÈRE — Votre recherche immobilière, sans Excel
-Version 1.4.0
+Version 1.5.0
 
 DÉMARRER
 
 1. Installez et ouvrez Docker Desktop avec les conteneurs Linux.
 2. Récupérez le dossier depuis GitHub (git clone https://github.com/Dicalius/Repere.git).
-3. Dans ce dossier, la première fois : docker compose up -d --build
-4. Le code de connexion s'affiche une fois dans les journaux du conteneur app
-   (Docker Desktop > repere-app-1 > Logs). Ouvrez http://127.0.0.1:8765 et collez-le.
-   Pour le retrouver : docker compose exec app repere token
+3. Dans ce dossier : docker compose up -d
+4. Code de connexion : docker compose exec app repere token
+   Ouvrez http://127.0.0.1:8765 et collez-le.
 
 Aucun script ni fichier .env n'est nécessaire (.env reste facultatif, voir .env.example).
 
 METTRE À JOUR
 
-Redémarrez le conteneur app (Docker Desktop, ou docker compose restart app). Au démarrage,
-il télécharge la dernière version validée par les tests sur GitHub (branche « valide »),
-installe les nouvelles dépendances si besoin, puis se lance. La base n'est pas touchée.
+À chaque push sur main, GitHub Actions construit l'image de l'application (ghcr.io/dicalius/repere).
+Quand le workflow « Image Repère » est vert, dans le dossier à jour (git pull) :
+   docker compose pull app
+   docker compose up -d --no-deps app
+Seul le conteneur app est remplacé ; la base et ses données ne sont pas touchées.
 Si l'extension a changé : chrome://extensions > Recharger.
 
 AJOUTER UNE ANNONCE DEPUIS CHROME OU EDGE

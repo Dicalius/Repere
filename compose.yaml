@@ -1,11 +1,13 @@
 name: repere
-# Premier lancement, ou après « Le démarrage du conteneur a changé » dans les journaux :
-#   docker compose up -d --build
-# Ensuite : docker compose up -d. Pour mettre à jour, redémarrer le conteneur « app » (Docker Desktop ou
-# « docker compose restart app ») : au démarrage, il récupère la dernière version validée par les tests sur GitHub.
+# Premier lancement : docker compose up -d
+# Mise à jour de l'application (image construite par GitHub Actions à chaque push sur main) :
+#   docker compose pull app
+#   docker compose up -d --no-deps app
+# PostgreSQL (image officielle) et les volumes ne sont pas touchés.
 services:
   app:
-    build: .
+    # REPERE_TAG (dans .env) fige une image précise : le SHA complet d'un commit. Absent ou vide : latest.
+    image: ghcr.io/dicalius/repere:${REPERE_TAG:-latest}
     ports:
       - "127.0.0.1:8765:8765"
     environment:
@@ -13,11 +15,6 @@ services:
       # aucun mot de passe à conserver ni à synchroniser.
       DATABASE_URL: "postgresql+psycopg://repere@/repere?host=/run/postgresql"
       REPERE_DATA_DIR: /app/data
-      # Source des mises à jour : branche « valide », avancée par GitHub Actions quand les tests réussissent.
-      REPERE_GITHUB_REPO: "${REPERE_GITHUB_REPO:-Dicalius/Repere}"
-      REPERE_GITHUB_REF: "${REPERE_GITHUB_REF:-valide}"
-      # Facultatif : nécessaire seulement si le dépôt devient privé (jeton en lecture seule sur ce dépôt).
-      REPERE_GITHUB_TOKEN: "${REPERE_GITHUB_TOKEN:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
       PARSER_RULES_PATH: /app/config/parsers.json
@@ -36,9 +33,8 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3)"]
       interval: 10s
       timeout: 5s
-      retries: 6
-      # Marge pour le téléchargement d'une version et, rarement, l'installation de nouvelles dépendances.
-      start_period: 600s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
   db:
     image: postgres:17-alpine

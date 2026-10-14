@@ -24,6 +24,6 @@ L'API est vérifiée sur les captures, corrections conservées, révisions concu
 - Appel réel à Gemini avec votre clé et le modèle configuré. Les contrôles de citations et le maintien des données locales en cas d'échec sont testés sans requête payante.
 - Extraction de votre annonce Jinka réelle : aucune capture complète de cette annonce n'était fournie. Les captures des tests n'attestent pas une compatibilité exhaustive avec tous les portails.
 
-Pour la première utilisation, démarrez avec `docker compose up -d --build`, vérifiez le statut des services avec `docker compose ps`, puis importez une annonce connue via l'extension. Contrôlez son prix, sa surface et sa ville avant de valider la fiche.
+Pour la première utilisation, démarrez avec `docker compose up -d`, vérifiez le statut des services avec `docker compose ps`, puis importez une annonce connue via l'extension. Contrôlez son prix, sa surface et sa ville avant de valider la fiche.
 
 La première version n'inclut pas de migration du classeur Excel, d'OCR, de robot connecté aux portails, d'accès multi-utilisateur ou d'évaluation bancaire automatique.
