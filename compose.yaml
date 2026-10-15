@@ -22,6 +22,8 @@ services:
       ADEME_DPE_DATASET: "${ADEME_DPE_DATASET:-meg-83tjwtg8dyz4vv7h1dqe}"
       # Recherche d'adresse lancée après chaque capture (lieu, DPE et surface envoyés à l'ADEME). 0 pour désactiver.
       ADEME_AUTO_SEARCH: "${ADEME_AUTO_SEARCH:-1}"
+      # Comparaison au marché local : code postal et ville envoyés à geo.api.gouv.fr, code commune à data.gouv.fr. 0 pour désactiver.
+      MARKET_LOOKUP: "${MARKET_LOOKUP:-1}"
     volumes:
       - app_data:/app/data
       - pg_socket:/run/postgresql:ro

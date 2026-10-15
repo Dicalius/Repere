@@ -21,7 +21,8 @@
       price: (ad.price || []).filter(p => typeof p === 'number').slice(0, 2),
       price_cents: typeof ad.price_cents === 'number' ? ad.price_cents : null,
       category_id: cut(ad.category_id, 10), category_name: cut(ad.category_name, 100), ad_type: cut(ad.ad_type, 20),
-      url: cut(ad.url, 300), first_publication_date: cut(ad.first_publication_date, 40), owner_type: cut(ad.owner?.type, 20),
+      url: cut(ad.url, 300), first_publication_date: cut(ad.first_publication_date, 40), index_date: cut(ad.index_date, 40),
+      owner_type: cut(ad.owner?.type, 20),
       location, images: (images.urls_large || images.urls || []).filter(u => typeof u === 'string').slice(0, 5), attributes}};
   }
   let siteData = null, siteWarning = '';

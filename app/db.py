@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from sqlalchemy import JSON, Boolean, DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, LargeBinary, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 DATA_DIR = Path(os.getenv("REPERE_DATA_DIR", "data"))
@@ -62,6 +62,18 @@ class Photo(Base):
     digest: Mapped[str] = mapped_column(String(64))
     source_url: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class PricePoint(Base):
+    """Prix (ou loyer) relevé à chaque capture d'une annonce : historique des baisses et hausses.
+    Table séparée, créée automatiquement au démarrage sur une base existante."""
+    __tablename__ = "price_points"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    listing_id: Mapped[str] = mapped_column(String(36), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    amount: Mapped[float] = mapped_column(Float)
+    transaction: Mapped[str] = mapped_column(String(10), default="Achat")
+    source: Mapped[str] = mapped_column(String(30), default="capture")
 
 
 class Setting(Base):

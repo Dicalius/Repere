@@ -52,11 +52,11 @@ test('permissions limitées au clic et au service local',()=>{
 
 test('Leboncoin : annonce lue dans __NEXT_DATA__, sans données du vendeur',async()=>{
  const sale=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures','leboncoin_vente.json'),'utf8')).ad;
- const ad={...sale,images:{urls:sale.images},owner:{type:'private',name:'Nom du vendeur',user_id:'compte-123'}};
+ const ad={...sale,index_date:'2025-11-02 08:15:00',images:{urls:sale.images},owner:{type:'private',name:'Nom du vendeur',user_id:'compte-123'}};
  const page=`<html><head><title>Annonce | leboncoin</title></head><body><main><h1>${ad.subject}</h1><p>379 000 €</p></main><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({props:{pageProps:{ad}}})}</script></body></html>`;
  const dom=new JSDOM(page,{runScripts:'outside-only',url:'https://www.leboncoin.fr/ad/ventes_immobilieres/'+ad.list_id});
  const r=await dom.window.eval(code);
- assert.equal(r.site_data.source,'leboncoin');assert.equal(r.site_data.ad.list_id,ad.list_id);assert.deepEqual(Array.from(r.site_data.ad.price),[379000]);
+ assert.equal(r.site_data.source,'leboncoin');assert.equal(r.site_data.ad.list_id,ad.list_id);assert.equal(r.site_data.ad.first_publication_date,'2025-09-24 19:31:00');assert.equal(r.site_data.ad.index_date,'2025-11-02 08:15:00');assert.deepEqual(Array.from(r.site_data.ad.price),[379000]);
  assert.doesNotMatch(JSON.stringify(r.site_data),/Nom du vendeur|compte-123/);assert.ok(r.images[0].startsWith('https://img.leboncoin.fr/'));
  dom.window.close();
 });

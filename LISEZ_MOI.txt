@@ -1,5 +1,5 @@
 REPÈRE — Votre recherche immobilière, sans Excel
-Version 1.5.0
+Version 1.6.0
 
 DÉMARRER
 
@@ -19,6 +19,12 @@ Quand le workflow « Image Repère » est vert, dans le dossier à jour (git pul
    docker compose up -d --no-deps app
 Seul le conteneur app est remplacé ; la base et ses données ne sont pas touchées.
 Si l'extension a changé : chrome://extensions > Recharger.
+
+REPÈRES SUR CHAQUE ANNONCE
+
+Depuis quand l'annonce est en ligne, évolution du prix entre vos captures (recapturez une annonce
+pour suivre son prix), écart au prix médian des ventes (DVF) ou au loyer de référence de la commune,
+calendrier de location selon le DPE, même bien repéré dans une autre annonce.
 
 AJOUTER UNE ANNONCE DEPUIS CHROME OU EDGE
 

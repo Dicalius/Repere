@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Repère — Capturer une annonce",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "Envoie le contenu de l'annonce ouverte vers votre comparateur Repère local.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["http://127.0.0.1/*"],

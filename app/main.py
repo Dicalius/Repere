@@ -1,9 +1,11 @@
 from __future__ import annotations
 import hashlib
+import logging
 import os
 import re
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -13,9 +15,9 @@ from sqlalchemy import select, delete, func
 from sqlalchemy.exc import IntegrityError
 from pydantic import ValidationError
 from . import VERSION
-from .db import Session, Listing, CaptureRecord, Photo, Setting, Scenario, initialize, now
+from .db import Session, Listing, CaptureRecord, Photo, PricePoint, Setting, Scenario, initialize, now
 from .schemas import AddressSearch, Capture, Facts, ImportRequest, ListingEdit, PhotoRequest, Profile, ScenarioSave, Simulation
-from . import photos
+from . import insights, market, photos
 from .dpe_lookup import search_addresses
 from .finance import calculate
 from .security import authenticate, token, public_url
@@ -24,11 +26,13 @@ from .parsing.pipeline import pipeline, clean_html
 from .parsing import sites
 
 STATIC = Path(__file__).parent / "static"
+log = logging.getLogger("repere")
 
 
 @asynccontextmanager
 async def lifespan(app):
     initialize()
+    insights.backfill()
     token()
     yield
 
@@ -81,11 +85,31 @@ def photo_versions(db, ids=None):
     return {listing_id: value[:12] for listing_id, value in db.execute(query)}
 
 
-def listing_json(row, photo=None):
+def listing_json(row, photo=None, insight=None):
     return {"id": row.id, "url": row.url, "title": row.title, "facts": row.facts, "photo": photo,
             "overrides": row.overrides, "report": row.report, "notes": row.notes, "status": row.status,
             "favorite": row.favorite, "reviewed": row.reviewed, "revision": row.revision,
-            "created_at": row.created_at.isoformat(), "updated_at": row.updated_at.isoformat()}
+            "created_at": row.created_at.isoformat(), "updated_at": row.updated_at.isoformat(), "insights": insight}
+
+
+def insights_for(db, rows):
+    """Repères de chaque fiche : ancienneté, historique des prix, DPE et location, même bien, marché local."""
+    ids = [row.id for row in rows]
+    points = defaultdict(list)
+    query = select(PricePoint) if len(ids) > 200 else select(PricePoint).where(PricePoint.listing_id.in_(ids))
+    for point in db.scalars(query):
+        points[point.listing_id].append(point)
+    # Le même bien peut apparaître dans n'importe quelle autre fiche : comparaison avec toutes, colonnes utiles seulement.
+    everyone = db.execute(select(Listing.id, Listing.title, Listing.url, Listing.facts, Listing.created_at, Listing.status)).all()
+    same = insights.same_property_index(everyone)
+    today = date.today()
+    return {row.id: insights.build(row, points.get(row.id, []), same.get(row.id, []), today) for row in rows}
+
+
+def listing_with_insights(ident):
+    with Session() as db:
+        row = require_listing(db, ident)
+        return listing_json(row, photo_versions(db, [ident]).get(ident), insights_for(db, [row])[ident])
 
 
 def require_listing(db, ident, lock=False):
@@ -104,7 +128,10 @@ def prepare_site_data(capture):
         capture.images = list(dict.fromkeys(images + capture.images))[:5]
 
 
-def store_capture(capture, existing_id=None):
+def store_capture(capture, existing_id=None, observed_at=None, observe=True):
+    """Analyse et enregistre une capture. observe=False pour une réanalyse : ce n'est pas un nouveau relevé de prix,
+    et les dates relatives (« il y a 3 jours ») se comptent depuis la capture d'origine (observed_at)."""
+    observed_at = observed_at or now()
     if capture.url:
         capture.url = public_url(capture.url)
     prepare_site_data(capture)
@@ -115,8 +142,11 @@ def store_capture(capture, existing_id=None):
     if not capture.text.strip() and not capture.html.strip() and not capture.json_ld:
         raise HTTPException(400, "Ajoute du texte, du HTML ou une capture de l'annonce.")
     report = pipeline(capture)
+    report["dates"] = insights.extract_dates(capture.model_dump(), observed_at)
+    report["kind"] = insights.property_kind(report["title"], sites.extract(capture.site_data, capture.url)["hints"])
     with Session.begin() as db:
         row = require_listing(db, existing_id, lock=True) if existing_id else db.scalar(select(Listing).where(Listing.url == capture.url).with_for_update()) if capture.url else None
+        created = row is None
         if row is None:
             row = Listing(url=capture.url or None, url_hash=hashlib.sha256(capture.url.encode()).hexdigest() if capture.url else None,
                           title=report["title"] or "Annonce à compléter",
@@ -127,9 +157,14 @@ def store_capture(capture, existing_id=None):
             row.facts = {**report["facts"], **{k: v for k, v in row.overrides.items() if k in Facts.model_fields}}
             if "title" not in row.overrides:
                 row.title = report["title"] or row.title
+            if (row.report or {}).get("market"):
+                report["market"] = row.report["market"]       # rafraîchie ci-dessous si la fiche a changé
             row.report, row.reviewed = report, False
             row.updated_at, row.revision = now(), row.revision + 1
-        db.add(CaptureRecord(listing_id=row.id, payload=capture.model_dump(), report=report))
+        db.add(CaptureRecord(listing_id=row.id, payload=capture.model_dump(), report=report,
+                             created_at=observed_at if observe else now()))
+        if observe:
+            insights.record_price(db, row.id, report["facts"], observed_at)
         db.flush()
         result = listing_json(row)
     # Téléchargement hors transaction : une photo lente ou absente ne bloque jamais l'enregistrement.
@@ -138,10 +173,12 @@ def store_capture(capture, existing_id=None):
             save_photo(result["id"], *photos.fetch_photo(photos.sources(capture), capture.url))
         except HTTPException:
             pass
-    found = auto_address_search(result["id"]) if result["id"] else None
-    if found is not None:
-        result["report"] = {**(result["report"] or {}), "address_search": found}
-    return result
+    auto_address_search(result["id"])
+    try:
+        refresh_market(result["id"])
+    except Exception:          # la comparaison au marché est un complément : elle ne bloque jamais une capture
+        log.exception("Comparaison au marché impossible pour la fiche %s", result["id"])
+    return {**listing_with_insights(result["id"]), "created": created}
 
 
 def has_photo(listing_id):
@@ -172,14 +209,16 @@ def status():
                 "listings": db.scalar(select(func.count()).select_from(Listing)),
                 "database": "PostgreSQL" if db.bind.dialect.name == "postgresql" else "SQLite (développement)",
                 # Commit à partir duquel GitHub Actions a construit l'image (vide pour une image locale).
-                "commit": os.getenv("REPERE_COMMIT") or None}
+                "commit": os.getenv("REPERE_COMMIT") or None, "market_lookup": market.enabled()}
 
 
 @app.get("/api/listings", dependencies=[Depends(authenticate)])
 def listings():
     with Session() as db:
         versions = photo_versions(db)
-        return [listing_json(row, versions.get(row.id)) for row in db.scalars(select(Listing).order_by(Listing.updated_at.desc()))]
+        rows = list(db.scalars(select(Listing).order_by(Listing.updated_at.desc())))
+        found = insights_for(db, rows)
+        return [listing_json(row, versions.get(row.id), found[row.id]) for row in rows]
 
 
 @app.post("/api/listings", dependencies=[Depends(authenticate)])
@@ -196,8 +235,7 @@ def manual_listing(edit: ListingEdit):
 
 @app.get("/api/listings/{ident}", dependencies=[Depends(authenticate)])
 def listing(ident: str):
-    with Session() as db:
-        return listing_json(require_listing(db, ident), photo_versions(db, [ident]).get(ident))
+    return listing_with_insights(ident)
 
 
 @app.get("/api/listings/{ident}/photo", dependencies=[Depends(authenticate)])
@@ -241,12 +279,16 @@ def edit_listing(ident: str, edit: ListingEdit):
         if edit.revision is not None and edit.revision != row.revision:
             raise HTTPException(409, "Cette fiche a changé. Recharge-la avant d'enregistrer.")
         unknown = set(edit.facts) - Facts.model_fields.keys()
-        if unknown or any(field not in Facts.model_fields for field in edit.unlock_fields):
+        if unknown or any(field not in Facts.model_fields and field != "published_on" for field in edit.unlock_fields):
             raise HTTPException(422, "Champ d'annonce inconnu.")
         overrides = dict(row.overrides)
         for field in edit.unlock_fields:
             overrides.pop(field, None)
         overrides.update(edit.facts)
+        if edit.published_on == "":
+            overrides.pop("published_on", None)
+        elif edit.published_on is not None:
+            overrides["published_on"] = edit.published_on
         row.facts = Facts.model_validate({**row.report.get("facts", row.facts), **{k: v for k, v in overrides.items() if k in Facts.model_fields}}).model_dump()
         if edit.title is not None:
             row.title = edit.title
@@ -266,6 +308,7 @@ def delete_listing(ident: str):
         row = require_listing(db, ident, lock=True)
         db.execute(delete(CaptureRecord).where(CaptureRecord.listing_id == ident))
         db.execute(delete(Photo).where(Photo.listing_id == ident))
+        db.execute(delete(PricePoint).where(PricePoint.listing_id == ident))
         for scenario in db.scalars(select(Scenario).where(Scenario.listing_id == ident)):
             scenario.listing_id = None
         db.delete(row)
@@ -284,8 +327,10 @@ def import_listing(req: ImportRequest):
 @app.post("/capture", dependencies=[Depends(authenticate)])
 def extension_capture(capture: Capture):
     row = store_capture(capture)
-    return {"ok": True, "url": row["url"], "listing_id": row["id"], "listing": row,
-            "message": "Annonce ajoutée à Repère. Vérifie sa fiche."}
+    return {"ok": True, "url": row["url"], "listing_id": row["id"], "listing": row, "created": row["created"],
+            "summary": insights.headline(row["insights"] or {}),
+            "message": "Annonce ajoutée à Repère. Vérifie sa fiche." if row["created"] else
+                       "Annonce déjà suivie : fiche mise à jour et nouveau relevé de prix enregistré."}
 
 
 @app.post("/api/preview", dependencies=[Depends(authenticate)])
@@ -303,9 +348,9 @@ def reanalyze(ident: str, options: Capture):
         capture = db.scalar(select(CaptureRecord).where(CaptureRecord.listing_id == ident).order_by(CaptureRecord.created_at.desc()))
         if not capture:
             raise HTTPException(409, "Pas de capture à réanalyser ; importe du texte ou du HTML.")
-        payload = Capture.model_validate(capture.payload)
+        payload, observed_at = Capture.model_validate(capture.payload), capture.created_at
     payload.use_gemini, payload.parsers = options.use_gemini, options.parsers
-    return store_capture(payload, ident)
+    return store_capture(payload, ident, observed_at=observed_at, observe=False)
 
 
 def capture_hints(listing_id):
@@ -321,8 +366,7 @@ def capture_hints(listing_id):
 def criteria_from(facts: dict, title: str, hints: dict, listing_id: str | None = None):
     """Critères de recherche d'adresse à partir d'une fiche ; None si elle ne suffit pas."""
     year = re.fullmatch(r"\s*(\d{4})\s*", str(facts.get("delivery") or ""))
-    kind = hints.get("kind") or ("maison" if re.search(r"\b(?:maison|villa)\b", title or "", re.I) else
-                                 "appartement" if re.search(r"\b(?:appartement|appt|studio|duplex|loft)\b", title or "", re.I) else "")
+    kind = insights.property_kind(title, hints)
     try:
         return AddressSearch(listing_id=listing_id, postal_code=facts.get("postal_code"), city=facts.get("city"),
                              dpe_kwh_m2=facts.get("dpe_kwh_m2") or None, ges_kg_m2=facts.get("ges_kg_m2"),
@@ -358,6 +402,49 @@ def auto_address_search(listing_id):
         if row:
             row.report = {**(row.report or {}), "address_search": result}
     return result
+
+
+def refresh_market(listing_id, force=False):
+    """Référence de marché de la fiche (DVF ou carte des loyers), recherchée si absente, périmée ou devenue fausse."""
+    if not market.enabled():
+        return None
+    with Session() as db:
+        row = db.get(Listing, listing_id)
+        if not row:
+            return None
+        facts, current, kind = dict(row.facts or {}), (row.report or {}).get("market"), insights.listing_kind(row)
+    if not force and not market.needs_refresh(current, facts, kind):
+        return current
+    reference = market.lookup(facts, kind)
+    if reference is None:
+        return None
+    with Session.begin() as db:
+        row = db.get(Listing, listing_id)
+        if row:
+            row.report = {**(row.report or {}), "market": reference}
+    return reference
+
+
+@app.post("/api/listings/{ident}/market", dependencies=[Depends(authenticate)])
+def listing_market(ident: str):
+    with Session() as db:
+        row = require_listing(db, ident)
+        if not (row.facts or {}).get("postal_code") and not (row.facts or {}).get("city"):
+            raise HTTPException(409, "Renseigne le code postal ou la ville pour comparer au marché local.")
+    if not market.enabled():
+        raise HTTPException(409, "Comparaison au marché désactivée (MARKET_LOOKUP=0).")
+    refresh_market(ident, force=True)
+    return listing_with_insights(ident)
+
+
+@app.delete("/api/listings/{ident}/prices/{point_id}", dependencies=[Depends(authenticate)])
+def delete_price(ident: str, point_id: str):
+    """Retire un relevé de prix erroné (mauvaise extraction) de l'historique."""
+    with Session.begin() as db:
+        require_listing(db, ident)
+        if not db.execute(delete(PricePoint).where(PricePoint.id == point_id, PricePoint.listing_id == ident)).rowcount:
+            raise HTTPException(404, "Relevé de prix introuvable")
+    return listing_with_insights(ident)
 
 
 @app.post("/api/dpe/address", dependencies=[Depends(authenticate)])
@@ -450,14 +537,16 @@ def backup():
         return {"format": "repere.backup.v1", "exported_at": now().isoformat(), "profile": profile(),
                 "listings": listings(), "scenarios": scenarios(),
                 "captures": [{"id": row.id, "listing_id": row.listing_id, "payload": row.payload,
-                              "report": row.report, "created_at": row.created_at.isoformat()} for row in db.scalars(select(CaptureRecord))]}
+                              "report": row.report, "created_at": row.created_at.isoformat()} for row in db.scalars(select(CaptureRecord))],
+                "price_points": [{"id": p.id, "listing_id": p.listing_id, "observed_at": p.observed_at.isoformat(), "amount": p.amount,
+                                  "transaction": p.transaction, "source": p.source} for p in db.scalars(select(PricePoint))]}
 
 
 @app.post("/api/restore", dependencies=[Depends(authenticate)])
 def restore(payload: dict):
     if payload.get("format") != "repere.backup.v1":
         raise HTTPException(422, "Sauvegarde Repère v1 attendue.")
-    added, skipped = 0, 0
+    added, skipped, restored = 0, 0, set()
     try:
         with Session.begin() as db:
             for item in payload.get("listings", []):
@@ -469,12 +558,13 @@ def restore(payload: dict):
                 edit = ListingEdit(title=item["title"], notes=item.get("notes", ""), status=item.get("status", "À étudier"), facts=facts)
                 restored_url = public_url(item["url"]) if item.get("url") else None
                 db.add(Listing(id=item["id"], url=restored_url, url_hash=hashlib.sha256(restored_url.encode()).hexdigest() if restored_url else None, title=edit.title,
-                    facts=facts, overrides={k: v for k, v in item.get("overrides", {}).items() if k in Facts.model_fields or k == "title"},
+                    facts=facts, overrides={k: v for k, v in item.get("overrides", {}).items() if k in Facts.model_fields or k in ("title", "published_on")},
                     report=item.get("report", {}), notes=edit.notes, status=edit.status,
                     favorite=bool(item.get("favorite")), reviewed=bool(item.get("reviewed")),
                     created_at=datetime.fromisoformat(item["created_at"]), updated_at=datetime.fromisoformat(item["updated_at"])))
                 db.flush()
                 added += 1
+                restored.add(item["id"])
             for item in payload.get("captures", []):
                 UUID(item["id"])
                 if db.get(CaptureRecord, item["id"]) or not db.get(Listing, item["listing_id"]):
@@ -483,6 +573,24 @@ def restore(payload: dict):
                 capture.html = clean_html(capture.html) if capture.html else ""
                 db.add(CaptureRecord(id=item["id"], listing_id=item["listing_id"], payload=capture.model_dump(),
                                      report=item.get("report", {}), created_at=datetime.fromisoformat(item["created_at"])))
+            with_history = set()
+            for item in payload.get("price_points", []):
+                UUID(item["id"])
+                if item["listing_id"] not in restored or db.get(PricePoint, item["id"]):
+                    continue
+                amount, transaction = float(item["amount"]), item.get("transaction")
+                if not (0 < amount <= 100_000_000) or transaction not in ("Achat", "Location"):
+                    raise ValueError("relevé de prix invalide")
+                db.add(PricePoint(id=item["id"], listing_id=item["listing_id"], amount=amount, transaction=transaction,
+                                  observed_at=datetime.fromisoformat(item["observed_at"]), source=str(item.get("source") or "capture")[:30]))
+                with_history.add(item["listing_id"])
+            # Sauvegarde antérieure aux relevés de prix : historique reconstitué à partir des captures restaurées.
+            db.flush()
+            records = db.execute(select(CaptureRecord.listing_id, CaptureRecord.created_at, CaptureRecord.payload, CaptureRecord.report)
+                                 .where(CaptureRecord.listing_id.in_(list(restored))).order_by(CaptureRecord.listing_id, CaptureRecord.created_at)).all()
+            points, latest = insights.history_from_captures(records, frozenset(with_history))
+            db.add_all(points)
+            insights.complete_reports(db, latest, restored)
             for item in payload.get("scenarios", []):
                 UUID(item["id"])
                 if db.get(Scenario, item["id"]):

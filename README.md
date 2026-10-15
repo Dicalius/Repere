@@ -86,11 +86,23 @@ Les captures restent en base et peuvent être réanalysées après une modificat
 
 Pour ajouter une règle CSS à un site ou brancher un autre parseur : [docs/PARSEURS.md](docs/PARSEURS.md).
 
+## Repères sur l'annonce
+
+Chaque carte et chaque fiche affichent quelques repères, aussi repris dans **Comparer** et dans la fenêtre de l'extension après une capture :
+
+- **Ancienneté** : date de première publication lue dans la capture. Elle vient des données de l'annonce sur Leboncoin (avec la date de modification ou de remontée), de `datePosted` dans les données structurées, ou du texte (« publiée le 12/09 », « mise en ligne il y a 3 jours »). Corrigez-la dans la fiche si besoin. Sans date, la fiche indique depuis quand Repère la suit.
+- **Prix relevé** : chaque capture enregistre le prix, ou le loyer, affiché ce jour-là. Recapturer la même annonce plus tard montre la baisse ou la hausse depuis le premier relevé. Repère ne surveille pas les sites : il ne connaît que les prix capturés. Un relevé erroné (mauvaise extraction) se retire depuis la fiche ; une réanalyse n'ajoute pas de relevé. Lors de la mise à jour vers la version 1.6, les captures existantes servent de premiers relevés.
+- **Marché local** : pour un achat, le prix au m² est comparé au prix médian des ventes réelles de la commune sur cinq ans ([Statistiques DVF](https://www.data.gouv.fr/datasets/statistiques-dvf/), appartements ou maisons). Pour une location, le loyer au m² charges comprises est comparé au loyer de référence de la commune ([Carte des loyers](https://www.data.gouv.fr/datasets/693aa2feed1bf4da603faa49/), logements non meublés, avec sa fourchette). Paris, Lyon et Marseille sont comparés par arrondissement. C'est un repère, pas une estimation du bien.
+- **DPE et location** : calendrier d'interdiction à la location (G depuis 2025, F en 2028, E en 2034 en métropole) et gel des loyers des logements F et G.
+- **Même bien probable** : une autre fiche de Repère avec le même lieu, la même surface et la même consommation DPE (ou les mêmes pièces, lettres DPE/GES et étage), par exemple une republication ou une autre agence.
+
+Pour le marché local, Repère envoie le code postal et la ville à `geo.api.gouv.fr` pour obtenir le code de la commune, puis ce code à l'API de `data.gouv.fr`. Ni le prix, ni l'adresse, ni l'URL de l'annonce ne sont envoyés. `MARKET_LOOKUP=0` dans `.env` désactive ces appels.
+
 ## Comparer et simuler
 
 Dans **Mon budget**, renseignez vos revenus mensuels avant impôt, votre épargne, la réserve à conserver, les autres crédits et vos hypothèses de financement. Ces données commencent vides lorsque nécessaires : aucune situation personnelle n'est présumée.
 
-Dans **Mes annonces**, ajoutez notes, favoris et statut de suivi, puis cochez jusqu'à quatre biens pour les comparer. La comparaison utilise les mêmes hypothèses de profil pour tous les biens. Les scénarios détaillés restent accessibles depuis **Simuler**.
+Dans **Mes annonces**, ajoutez notes, favoris et statut de suivi ; triez par ancienneté en ligne ou par baisse de prix ; puis cochez jusqu'à quatre biens pour les comparer. La comparaison utilise les mêmes hypothèses de profil pour tous les biens. Les scénarios détaillés restent accessibles depuis **Simuler**.
 
 Deux modes sont proposés :
 

@@ -123,6 +123,21 @@ class ListingEdit(Strict):
     status: Literal["À étudier", "À visiter", "Visité", "Offre", "Écarté"] | None = None
     favorite: bool | None = None
     reviewed: bool | None = None
+    # Date de première publication saisie à la main (AAAA-MM-JJ) ; "" revient à la date lue dans la capture.
+    published_on: str | None = Field(None, max_length=10)
+
+    @field_validator("published_on")
+    @classmethod
+    def plausible_day(cls, value):
+        if value:
+            from datetime import date, timedelta
+            try:
+                day = date.fromisoformat(value)
+            except ValueError:
+                raise ValueError("Date au format AAAA-MM-JJ attendue") from None
+            if not date(2000, 1, 1) <= day <= date.today() + timedelta(days=1):
+                raise ValueError("Date de publication improbable")
+        return value
 
 
 class Profile(Strict):

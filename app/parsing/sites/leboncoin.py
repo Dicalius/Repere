@@ -57,7 +57,9 @@ def reduce_ad(ad: dict) -> dict:
             "price_cents": ad.get("price_cents") if isinstance(ad.get("price_cents"), (int, float)) else None,
             "category_id": text(ad.get("category_id"), 10), "category_name": text(ad.get("category_name"), 100),
             "ad_type": text(ad.get("ad_type"), 20), "url": text(ad.get("url"), 300),
+            # Première mise en ligne, puis dernière modification ou remontée en tête de liste.
             "first_publication_date": text(ad.get("first_publication_date"), 40),
+            "index_date": text(ad.get("index_date"), 40),
             "owner_type": text((ad.get("owner") or {}).get("type") or ad.get("owner_type"), 20),
             "location": {k: location.get(k) for k in LOCATION_KEYS if location.get(k) not in (None, "")},
             "images": [u for u in ((images.get("urls_large") or images.get("urls") or []) if isinstance(images, dict) else images)
@@ -224,6 +226,9 @@ def extract(site_data: dict | None, url: str) -> dict:
     published = re.match(r"\d{4}-\d{2}-\d{2}", str(ad.get("first_publication_date") or ""))
     if published:
         result["hints"]["published"] = published[0]
+    updated = re.match(r"\d{4}-\d{2}-\d{2}", str(ad.get("index_date") or ""))
+    if updated:
+        result["hints"]["updated"] = updated[0]
     levels = number(attr("nb_floors_building").get("value"))
     if levels is not None and levels.is_integer():
         result["hints"]["floors_building"] = int(levels)
